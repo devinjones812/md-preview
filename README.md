@@ -6,6 +6,7 @@ Double-click a `.md` file on your Mac to see it formatted, GitHub style. Double-
 
 ```sh
 brew tap devinjones812/md-preview https://github.com/devinjones812/md-preview
+brew trust devinjones812/md-preview
 brew install md-preview
 ```
 
