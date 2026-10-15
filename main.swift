@@ -13,17 +13,35 @@ func resource(_ n: String, _ e: String) -> String {
     (try? String(contentsOf: Bundle.main.url(forResource: n, withExtension: e)!, encoding: .utf8)) ?? ""
 }
 
+// Borderless button that turns from gray to full text color on hover.
+final class HoverButton: NSButton {
+    let normal = NSColor.secondaryLabelColor, hover = NSColor.labelColor
+    func tint(_ c: NSColor) {
+        contentTintColor = c
+        attributedTitle = NSAttributedString(string: title, attributes: [.foregroundColor: c, .font: font ?? .systemFont(ofSize: NSFont.systemFontSize)])
+    }
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
+    }
+    override func mouseEntered(with e: NSEvent) { tint(hover) }
+    override func mouseExited(with e: NSEvent) { tint(normal) }
+}
+
 final class DocWindow: NSWindowController, NSWindowDelegate, NSToolbarDelegate, WKScriptMessageHandler, WKNavigationDelegate {
     let url: URL
     var web: WKWebView!
     let scroll = NSTextView.scrollableTextView()
     var text: NSTextView { scroll.documentView as! NSTextView }
     let toggle = NSButton(title: "Edit", target: nil, action: nil)
+    let pdfButton = HoverButton(title: "PDF", target: nil, action: nil)
     var editing = false
     var mtime: Date?
     var pendingScrollLine: Int?
     var previewScrollY: Double = 0
     static let toggleID = NSToolbarItem.Identifier("toggle")
+    static let pdfID = NSToolbarItem.Identifier("pdf")
 
     init(url: URL) {
         self.url = url
@@ -36,6 +54,7 @@ final class DocWindow: NSWindowController, NSWindowDelegate, NSToolbarDelegate, 
         cfg.userContentController.addUserScript(WKUserScript(source: resource("highlight.min", "js"), injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         cfg.userContentController.addUserScript(WKUserScript(source: resource("page", "js"), injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         cfg.userContentController.add(self, name: "edit")
+        if #available(macOS 13.3, *) { cfg.preferences.shouldPrintBackgrounds = true }
         web = WKWebView(frame: .zero, configuration: cfg)
         web.navigationDelegate = self
 
@@ -52,6 +71,14 @@ final class DocWindow: NSWindowController, NSWindowDelegate, NSToolbarDelegate, 
         toggle.target = self
         toggle.action = #selector(toggleMode)
         toggle.bezelStyle = .rounded
+        pdfButton.target = self
+        pdfButton.action = #selector(exportPDF(_:))
+        pdfButton.isBordered = false  // secondary action: no border, gray, so Edit stays primary
+        pdfButton.tint(pdfButton.normal)
+        pdfButton.image = NSImage(systemSymbolName: "arrow.down.to.line", accessibilityDescription: "Export as PDF")?
+            .withSymbolConfiguration(.init(pointSize: NSFont.systemFontSize, weight: .regular, scale: .small))
+        pdfButton.imagePosition = .imageLeading
+        pdfButton.toolTip = "Export as PDF (⌘P)"
 
         win.title = url.lastPathComponent
         win.representedURL = url
@@ -124,6 +151,7 @@ final class DocWindow: NSWindowController, NSWindowDelegate, NSToolbarDelegate, 
     }
 
     func webView(_ w: WKWebView, didFinish n: WKNavigation!) {
+        if let out = pendingExport { pendingExport = nil; writePDF(to: out) }
         if let line = pendingScrollLine {
             w.evaluateJavaScript("scrollToLine(\(line))")
             pendingScrollLine = nil
@@ -185,6 +213,37 @@ final class DocWindow: NSWindowController, NSWindowDelegate, NSToolbarDelegate, 
         if let tag { root.addSubview(v, positioned: .below, relativeTo: tag) } else { root.addSubview(v) }
     }
 
+    // Export PDF: save the preview as a paged PDF. In edit mode, render first.
+    var pendingExport: URL?
+    @objc func exportPDF(_ s: Any?) {
+        guard let win = window else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.directoryURL = url.deletingLastPathComponent()
+        panel.nameFieldStringValue = url.deletingPathExtension().lastPathComponent + ".pdf"
+        panel.beginSheetModal(for: win) { [weak self] r in
+            guard r == .OK, let out = panel.url, let self else { return }
+            DispatchQueue.main.async {
+                if self.editing { self.pendingExport = out; self.enterPreview() } else { self.writePDF(to: out) }
+            }
+        }
+    }
+    func writePDF(to out: URL) {
+        guard let win = window else { return }
+        let info = NSPrintInfo()
+        info.jobDisposition = .save
+        info.dictionary()[NSPrintInfo.AttributeKey.jobSavingURL] = out
+        info.horizontalPagination = .fit
+        info.isHorizontallyCentered = false
+        info.isVerticallyCentered = false
+        (info.topMargin, info.bottomMargin, info.leftMargin, info.rightMargin) = (54, 54, 54, 54)
+        let op = web.printOperation(with: info)
+        op.showsPrintPanel = false
+        op.showsProgressPanel = false
+        op.view?.frame = web.bounds
+        op.runModal(for: win, delegate: nil, didRun: nil, contextInfo: nil)
+    }
+
     @objc func toggleMode() { editing ? enterPreview() : enterEdit(at: nil) }
     @objc func saveDocument(_ s: Any?) { save() }
 
@@ -203,11 +262,11 @@ final class DocWindow: NSWindowController, NSWindowDelegate, NSToolbarDelegate, 
         (NSApp.delegate as? AppDelegate)?.closed(self)
     }
 
-    func toolbarAllowedItemIdentifiers(_ t: NSToolbar) -> [NSToolbarItem.Identifier] { [.flexibleSpace, Self.toggleID] }
-    func toolbarDefaultItemIdentifiers(_ t: NSToolbar) -> [NSToolbarItem.Identifier] { [.flexibleSpace, Self.toggleID] }
+    func toolbarAllowedItemIdentifiers(_ t: NSToolbar) -> [NSToolbarItem.Identifier] { [.flexibleSpace, Self.pdfID, .space, Self.toggleID] }
+    func toolbarDefaultItemIdentifiers(_ t: NSToolbar) -> [NSToolbarItem.Identifier] { [.flexibleSpace, Self.pdfID, .space, Self.toggleID] }
     func toolbar(_ t: NSToolbar, itemForItemIdentifier id: NSToolbarItem.Identifier, willBeInsertedIntoToolbar f: Bool) -> NSToolbarItem? {
         let item = NSToolbarItem(itemIdentifier: id)
-        item.view = toggle
+        item.view = id == Self.pdfID ? pdfButton : toggle
         return item
     }
 }
@@ -271,6 +330,7 @@ main.addItem(menu("MD Preview", [
 main.addItem(menu("File", [
     ("Open…", #selector(AppDelegate.openDocument(_:)), "o"),
     ("Save", #selector(DocWindow.saveDocument(_:)), "s"),
+    ("Export as PDF…", #selector(DocWindow.exportPDF(_:)), "p"),
     ("Close Window", #selector(NSWindow.performClose(_:)), "w"),
 ]))
 main.addItem(menu("Edit", [

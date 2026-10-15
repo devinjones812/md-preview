@@ -6,6 +6,8 @@ There was no simple, free, bare-bones Markdown viewer and editor for Mac, so I b
 
 Double-click a `.md` file to read it formatted. Double-click any word to edit the text there. Cmd+E switches back.
 
+Built-in PDF export: click **PDF** in the toolbar (or Cmd+P) to save the document as a PDF that looks like the preview.
+
 ```sh
 brew tap devinjones812/md-preview https://github.com/devinjones812/md-preview
 brew trust devinjones812/md-preview
