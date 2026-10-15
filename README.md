@@ -5,7 +5,8 @@ Double-click a `.md` file on your Mac to see it formatted, GitHub style. Double-
 ![MD Preview](docs/screenshot.png)
 
 ```sh
-brew install devinjones812/tap/md-preview
+brew tap devinjones812/md-preview https://github.com/devinjones812/md-preview
+brew install md-preview
 ```
 
 Or from source: `brew install pandoc && ./build.sh --install`. Then choose **MD Preview → Set as Default for .md Files**.
