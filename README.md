@@ -1,8 +1,8 @@
 # MD Preview
 
-Double-click a `.md` file on your Mac to see it formatted, GitHub style. Double-click any word to edit it there. Cmd+E switches back.
+There was no simple, free, bare-bones Markdown viewer and editor for Mac, so I built one.
 
-![MD Preview](docs/screenshot.png)
+Double-click a `.md` file to read it formatted. Double-click any word to edit the text there. Cmd+E switches back.
 
 ```sh
 brew tap devinjones812/md-preview https://github.com/devinjones812/md-preview
