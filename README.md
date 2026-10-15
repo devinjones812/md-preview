@@ -1,5 +1,7 @@
 # MD Preview
 
+Open Markdown files on your Mac in a clean, simple viewer and editor.
+
 There was no simple, free, bare-bones Markdown viewer and editor for Mac, so I built one.
 
 Double-click a `.md` file to read it formatted. Double-click any word to edit the text there. Cmd+E switches back.
