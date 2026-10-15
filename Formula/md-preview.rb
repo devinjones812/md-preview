@@ -2,7 +2,7 @@ class MdPreview < Formula
   desc "macOS Markdown preview app with double-click-to-edit"
   homepage "https://github.com/devinjones812/md-preview"
   url "https://github.com/devinjones812/md-preview/archive/refs/tags/v1.0.0.tar.gz"
-  sha256 "24b72f6e7312c3a7d5ac6bb417f3cf3d4450a431bb75eed1e71ee212492802df"
+  sha256 "612b81217e38145555c1f01c3233801a4ff8c43e599dffe0387a9ae8503993bc"
   license "GPL-3.0-only"
 
   depends_on :macos
